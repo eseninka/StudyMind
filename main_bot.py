@@ -75,6 +75,8 @@ def callback_handler(callback):
     global new_progress
     global add_task
     global add_link
+    global num_intent
+
 
     if callback.data == 'diagnostics':
         logging.info(f'Пользователь с id {callback.message.chat.id} начал проходить диагностику')
