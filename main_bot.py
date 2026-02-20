@@ -72,11 +72,8 @@ def callback_handler(callback):
     global flag_update_deadline
     global flag_update_progress
     global new_deadline
-    global num_intent
     global new_progress
-    global data_intent
     global add_task
-    global data_tasks
     global add_link
 
     if callback.data == 'diagnostics':
@@ -156,7 +153,7 @@ def callback_handler(callback):
             connection = psycopg2.connect(host=host, user=name_user, password=password, database=database)
             connection.autocommit = True
             with connection.cursor() as cursor:
-                cursor.execute("select * from user_intent where user_id=%s and condition_intent='0'",
+                cursor.execute("select * from user_intent where user_id=%s and condition_intent='0' order by intent_num",
                                (str(callback.message.chat.id),))
                 data_intent = cursor.fetchall()
             if data_intent:
@@ -238,6 +235,9 @@ def callback_handler(callback):
             connection = psycopg2.connect(host=host, user=name_user, password=password, database=database)
             connection.autocommit = True
             with connection.cursor() as cursor:
+                cursor.execute("select * from user_intent where user_id=%s and condition_intent='0' order by intent_num",
+                        (str(callback.message.chat.id),))
+                data_intent = cursor.fetchall()
                 data = data_intent
                 object_changes = data[num_intent - 1][1]
                 cursor.execute("update user_intent set intent_deadline=%s where intent_num=%s and condition_intent='0'",
@@ -264,6 +264,9 @@ def callback_handler(callback):
             connection = psycopg2.connect(host=host, user=name_user, password=password, database=database)
             connection.autocommit = True
             with connection.cursor() as cursor:
+                cursor.execute("select * from user_intent where user_id=%s and condition_intent='0' order by intent_num",
+                              (str(callback.message.chat.id),))
+                data_intent = cursor.fetchall()
                 data = data_intent
                 object_changes = data[num_intent - 1][1]
                 cursor.execute("update user_intent set intent_progress=%s where intent_num=%s and condition_intent='0'",
@@ -284,6 +287,9 @@ def callback_handler(callback):
             connection = psycopg2.connect(host=host, user=name_user, password=password, database=database)
             connection.autocommit = True
             with connection.cursor() as cursor:
+                cursor.execute("select * from user_intent where user_id=%s and condition_intent='0' order by intent_num",
+                              (str(callback.message.chat.id),))
+                data_intent = cursor.fetchall()
                 data = data_intent
                 object_changes = data[num_intent - 1][1]
                 cursor.execute("update user_intent set intent_progress=100, condition_intent='1' where intent_num=%s",
@@ -350,7 +356,7 @@ def callback_handler(callback):
             connection = psycopg2.connect(host=host, user=name_user, password=password, database=database)
             connection.autocommit = True
             with connection.cursor() as cursor:
-                cursor.execute("select * from user_tasks where user_id=%s and task_create_at=%s and del_tasks='0'",
+                cursor.execute("select * from user_tasks where user_id=%s and task_create_at=%s and del_tasks='0' order by task_num",
                                (str(callback.message.chat.id), date.today()))
                 data_tasks = cursor.fetchall()
             if data_tasks:
@@ -408,6 +414,10 @@ def callback_handler(callback):
         try:
             connection = psycopg2.connect(host=host, user=name_user, password=password, database=database)
             connection.autocommit = True
+            with connection.cursor() as cursor:
+                cursor.execute("select * from user_tasks where user_id=%s and task_create_at=%s and del_tasks='0' order by task_num",
+                           (str(callback.message.chat.id), date.today()))
+                data_tasks = cursor.fetchall()
             del_task = data_tasks[add_task[callback.message.chat.id]['del_task'] - 1][1]
             logging.info(f'Пользователь с id {callback.message.chat.id} удалил задачу номер {del_task}')
             with connection.cursor() as cursor:
@@ -428,7 +438,7 @@ def callback_handler(callback):
             connection = psycopg2.connect(host=host, user=name_user, password=password, database=database)
             connection.autocommit = True
             with connection.cursor() as cursor:
-                cursor.execute("select * from user_tasks where user_id=%s and task_create_at=%s and del_tasks='0'",
+                cursor.execute("select * from user_tasks where user_id=%s and task_create_at=%s and del_tasks='0' order by task_num",
                                (str(callback.message.chat.id), date.today() - timedelta(days=1)))
                 data_tasks = cursor.fetchall()
             if data_tasks:
@@ -594,16 +604,30 @@ def text_handler(message):
                 bot.send_message(message.chat.id, "Ошибка! Введи дату в правильном формате -> dd.mm.YYYY")
     if flag_update:
         if message.text.strip().isdigit():
-            if int(message.text.strip()) <= len(data_intent):
-                num_intent = int(message.text.strip())
-                text = f'🔄 Обновление цели №{num_intent}\nЧто ты хочешь изменить?\n• Дедлайн — если срок изменился\n• Прогресс — если продвинулся в выполнении'
-                markup = types.InlineKeyboardMarkup()
-                btn1 = types.InlineKeyboardButton("Дедлайн", callback_data='update_deadline')
-                btn2 = types.InlineKeyboardButton("Прогресс", callback_data='update_progress')
-                markup.add(btn1, btn2)
-                bot.send_message(message.chat.id, text, reply_markup=markup)
-            else:
-                bot.send_message(message.chat.id, "Нет такой задачи! Введи корректный номер задачи")
+            try:
+                connection = psycopg2.connect(host=host, user=name_user, password=password, database=database)
+                connection.autocommit = True
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "select * from user_intent where user_id=%s and condition_intent='0' order by intent_num",
+                        (str(message.chat.id),))
+                    data_intent = cursor.fetchall()
+                if int(message.text.strip()) <= len(data_intent):
+                    num_intent = int(message.text.strip())
+                    text = f'🔄 Обновление цели №{num_intent}\nЧто ты хочешь изменить?\n• Дедлайн — если срок изменился\n• Прогресс — если продвинулся в выполнении'
+                    markup = types.InlineKeyboardMarkup()
+                    btn1 = types.InlineKeyboardButton("Дедлайн", callback_data='update_deadline')
+                    btn2 = types.InlineKeyboardButton("Прогресс", callback_data='update_progress')
+                    markup.add(btn1, btn2)
+                    bot.send_message(message.chat.id, text, reply_markup=markup)
+                else:
+                    bot.send_message(message.chat.id, "Нет такой задачи! Введи корректный номер задачи")
+            except Exception as e:
+                print(f'[info]: Ошибка {e}')
+            finally:
+                if connection:
+                    connection.close()
+                    print('[info]: коннект закрыт')
         else:
             bot.send_message(message.chat.id, 'Введите корректный номер задачи! - просто цифра или число')
     if flag_update_deadline:
@@ -653,16 +677,30 @@ def text_handler(message):
             markup.add(btn1, btn2)
             bot.send_message(message.chat.id, text, reply_markup=markup)
         elif add_task[message.chat.id]['del']:
-            if int(message.text.strip()) <= len(data_tasks):
-                add_task[message.chat.id]['del_task'] = int(message.text.strip())
-                text = f'Удалить задачу №{add_task[message.chat.id]['del_task']}'
-                markup = types.InlineKeyboardMarkup()
-                btn1 = types.InlineKeyboardButton("Да", callback_data='delete_task')
-                btn2 = types.InlineKeyboardButton("Отмена", callback_data='planner')
-                markup.add(btn1, btn2)
-                bot.send_message(message.chat.id, text, reply_markup=markup)
-            else:
-                bot.send_message(message.chat.id, "Нет такой задачи! Введи корректный номер задачи")
+            try:
+                connection = psycopg2.connect(host=host, user=name_user, password=password, database=database)
+                connection.autocommit = True
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "select * from user_tasks where user_id=%s and task_create_at=%s and del_tasks='0' order by task_num",
+                        (str(message.chat.id), date.today()))
+                    data_tasks = cursor.fetchall()
+                if int(message.text.strip()) <= len(data_tasks):
+                    add_task[message.chat.id]['del_task'] = int(message.text.strip())
+                    text = f'Удалить задачу №{add_task[message.chat.id]['del_task']}'
+                    markup = types.InlineKeyboardMarkup()
+                    btn1 = types.InlineKeyboardButton("Да", callback_data='delete_task')
+                    btn2 = types.InlineKeyboardButton("Отмена", callback_data='planner')
+                    markup.add(btn1, btn2)
+                    bot.send_message(message.chat.id, text, reply_markup=markup)
+                else:
+                    bot.send_message(message.chat.id, "Нет такой задачи! Введи корректный номер задачи")
+            except Exception as e:
+                print(f'[info]: Ошибка {e}')
+            finally:
+                if connection:
+                    connection.close()
+                    print('[info]: коннект закрыт')
     if message.chat.id in add_link.keys():
         if add_link[message.chat.id]['step'] == 1:
             link_from_users = message.text.strip()
